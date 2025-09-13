@@ -1,8 +1,8 @@
-# Enhanced Bash Script for node_modules Exposure Detection
-# This script specifically focuses on detecting exposed node_modules directories
-# Author: AI Assistant
-
 #!/bin/bash
+
+# Fixed Bash Script for node_modules Exposure Detection
+# Compatible with standard bash shell
+# Author: AI Assistant
 
 # Colors for output
 RED='\033[0;31m'
@@ -13,7 +13,7 @@ PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="$SCRIPT_DIR/security_scan_results"
 THREADS=10
 TIMEOUT=15
@@ -42,49 +42,6 @@ print_critical() {
     echo -e "${PURPLE}[CRITICAL]${NC} $1"
 }
 
-# node_modules exposure test paths
-NODE_MODULES_PATHS=(
-    "/node_modules/"
-    "/node_modules/package.json"
-    "/node_modules/react/"
-    "/node_modules/angular/"
-    "/node_modules/vue/"
-    "/node_modules/jquery/"
-    "/node_modules/lodash/"
-    "/node_modules/express/"
-    "/node_modules/.bin/"
-    "/assets/node_modules/"
-    "/static/node_modules/"
-    "/js/node_modules/"
-    "/public/node_modules/"
-    "/dist/node_modules/"
-    "/build/node_modules/"
-)
-
-# Directory traversal payloads
-TRAVERSAL_PAYLOADS=(
-    "../node_modules/"
-    "../../node_modules/"
-    "../../../node_modules/"
-    "..%2fnode_modules%2f"
-    "..%252fnode_modules%252f"
-    "%2e%2e%2fnode_modules%2f"
-    "%252e%252e%252fnode_modules%252f"
-    "....//node_modules/"
-    "..././node_modules/"
-)
-
-# Package.json exposure paths
-PACKAGE_JSON_PATHS=(
-    "/package.json"
-    "/node_modules/package.json"
-    "/static/package.json"
-    "/assets/package.json"
-    "/public/package.json"
-    "/dist/package.json"
-    "/build/package.json"
-)
-
 # Function to test node_modules exposure
 test_node_modules_exposure() {
     local base_url="$1"
@@ -93,8 +50,12 @@ test_node_modules_exposure() {
     
     print_status "Testing node_modules exposure for $base_url"
     
+    # Define test paths
+    local paths
+    paths="/node_modules/ /node_modules/package.json /node_modules/react/ /node_modules/angular/ /node_modules/vue/ /node_modules/jquery/ /node_modules/lodash/ /node_modules/express/ /node_modules/.bin/ /assets/node_modules/ /static/node_modules/ /js/node_modules/ /public/node_modules/ /dist/node_modules/ /build/node_modules/"
+    
     # Test direct paths
-    for path in "${NODE_MODULES_PATHS[@]}"; do
+    for path in $paths; do
         local test_url="${base_url%/}${path}"
         
         # Make request and check response
@@ -103,21 +64,27 @@ test_node_modules_exposure() {
             --user-agent "Mozilla/5.0 (Security Scanner)" \
             "$test_url" 2>/dev/null)
         
-        local http_code="${response: -3}"
-        local content="${response%???}"
-        
-        if [ "$http_code" = "200" ]; then
-            # Check for directory listing indicators
-            if echo "$content" | grep -qiE "(index of|directory listing|parent directory|package\.json|node_modules|npm|\.bin)"; then
-                print_critical "EXPOSED node_modules found: $test_url"
-                echo "{\"type\": \"direct_exposure\", \"url\": \"$test_url\", \"status\": \"$http_code\"}" >> "${output_file}.exposures"
-                ((exposures_found++))
+        if [ $? -eq 0 ]; then
+            local http_code="${response: -3}"
+            local content="${response%???}"
+            
+            if [ "$http_code" = "200" ]; then
+                # Check for directory listing indicators
+                if echo "$content" | grep -qiE "(index of|directory listing|parent directory|package\.json|node_modules|npm|\.bin)"; then
+                    print_critical "EXPOSED node_modules found: $test_url"
+                    echo "{\"type\": \"direct_exposure\", \"url\": \"$test_url\", \"status\": \"$http_code\"}" >> "${output_file}.exposures"
+                    exposures_found=$((exposures_found + 1))
+                fi
             fi
         fi
     done
     
+    # Define traversal payloads
+    local payloads
+    payloads="../node_modules/ ../../node_modules/ ../../../node_modules/ ..%2fnode_modules%2f ..%252fnode_modules%252f %2e%2e%2fnode_modules%2f %252e%252e%252fnode_modules%252f ....//node_modules/ ..././node_modules/"
+    
     # Test directory traversal
-    for payload in "${TRAVERSAL_PAYLOADS[@]}"; do
+    for payload in $payloads; do
         local test_url="${base_url%/}/${payload}"
         
         local response
@@ -125,14 +92,16 @@ test_node_modules_exposure() {
             --user-agent "Mozilla/5.0 (Security Scanner)" \
             "$test_url" 2>/dev/null)
         
-        local http_code="${response: -3}"
-        local content="${response%???}"
-        
-        if [ "$http_code" = "200" ]; then
-            if echo "$content" | grep -qiE "(package\.json|node_modules|\.bin|npm)"; then
-                print_critical "DIRECTORY TRAVERSAL SUCCESS: $test_url"
-                echo "{\"type\": \"traversal_exposure\", \"url\": \"$test_url\", \"status\": \"$http_code\"}" >> "${output_file}.exposures"
-                ((exposures_found++))
+        if [ $? -eq 0 ]; then
+            local http_code="${response: -3}"
+            local content="${response%???}"
+            
+            if [ "$http_code" = "200" ]; then
+                if echo "$content" | grep -qiE "(package\.json|node_modules|\.bin|npm)"; then
+                    print_critical "DIRECTORY TRAVERSAL SUCCESS: $test_url"
+                    echo "{\"type\": \"traversal_exposure\", \"url\": \"$test_url\", \"status\": \"$http_code\"}" >> "${output_file}.exposures"
+                    exposures_found=$((exposures_found + 1))
+                fi
             fi
         fi
     done
@@ -148,7 +117,11 @@ test_package_json_exposure() {
     
     print_status "Testing package.json exposure for $base_url"
     
-    for path in "${PACKAGE_JSON_PATHS[@]}"; do
+    # Define package.json paths
+    local pkg_paths
+    pkg_paths="/package.json /node_modules/package.json /static/package.json /assets/package.json /public/package.json /dist/package.json /build/package.json"
+    
+    for path in $pkg_paths; do
         local test_url="${base_url%/}${path}"
         
         local response
@@ -156,23 +129,25 @@ test_package_json_exposure() {
             --user-agent "Mozilla/5.0 (Security Scanner)" \
             "$test_url" 2>/dev/null)
         
-        local http_code="${response: -3}"
-        local content="${response%???}"
-        
-        if [ "$http_code" = "200" ]; then
-            # Check if it's valid JSON with package information
-            if echo "$content" | jq -e '.name' >/dev/null 2>&1 || \
-               echo "$content" | jq -e '.dependencies' >/dev/null 2>&1; then
-                print_warning "EXPOSED package.json found: $test_url"
-                
-                # Extract package name and dependencies
-                local pkg_name
-                local dependencies
-                pkg_name=$(echo "$content" | jq -r '.name // "unknown"' 2>/dev/null)
-                dependencies=$(echo "$content" | jq -r '.dependencies // {} | keys | join(",")' 2>/dev/null)
-                
-                echo "{\"type\": \"package_json\", \"url\": \"$test_url\", \"name\": \"$pkg_name\", \"dependencies\": \"$dependencies\"}" >> "${output_file}.packages"
-                ((exposures_found++))
+        if [ $? -eq 0 ]; then
+            local http_code="${response: -3}"
+            local content="${response%???}"
+            
+            if [ "$http_code" = "200" ]; then
+                # Check if it contains package.json indicators
+                if echo "$content" | grep -qE '("name"|"dependencies"|"version"|"scripts")'; then
+                    print_warning "EXPOSED package.json found: $test_url"
+                    
+                    # Try to extract package name (basic grep approach)
+                    local pkg_name
+                    pkg_name=$(echo "$content" | grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+                    if [ -z "$pkg_name" ]; then
+                        pkg_name="unknown"
+                    fi
+                    
+                    echo "{\"type\": \"package_json\", \"url\": \"$test_url\", \"name\": \"$pkg_name\"}" >> "${output_file}.packages"
+                    exposures_found=$((exposures_found + 1))
+                fi
             fi
         fi
     done
@@ -237,21 +212,20 @@ analyze_url_security() {
     local risk_level
     risk_level=$(assess_security_risk "${output_file}.exposures" "${output_file}.packages")
     
-    # Create result entry
-    jq -n \
-        --arg url "$url" \
-        --arg status "success" \
-        --arg risk_level "$risk_level" \
-        --argjson node_modules_exposures "$node_modules_result" \
-        --argjson package_json_exposures "$package_json_result" \
-        '{
-            url: $url, 
-            status: $status, 
-            security_risk: $risk_level,
-            node_modules_exposures: $node_modules_exposures,
-            package_json_exposures: $package_json_exposures,
-            timestamp: now
-        }' >> "$output_file"
+    # Create result entry (without jq dependency)
+    local timestamp
+    timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    
+    cat >> "$output_file" << EOF
+{
+    "url": "$url",
+    "status": "success",
+    "security_risk": "$risk_level",
+    "node_modules_exposures": $node_modules_result,
+    "package_json_exposures": $package_json_result,
+    "timestamp": "$timestamp"
+},
+EOF
     
     # Log risk level
     case "$risk_level" in
@@ -270,49 +244,49 @@ analyze_url_security() {
     esac
 }
 
-# Function to process URLs in parallel
-process_urls_parallel() {
+# Function to process URLs sequentially (simplified for compatibility)
+process_urls_sequential() {
     local input_file="$1"
     local output_file="$2"
     
-    print_status "Processing URLs for security vulnerabilities (max $THREADS threads)"
+    print_status "Processing URLs for security vulnerabilities"
     
-    # Create temporary files for each URL
-    local temp_dir="$OUTPUT_DIR/temp_$$"
-    mkdir -p "$temp_dir"
+    # Initialize output file
+    echo "[" > "$output_file"
     
-    # Initialize output files
-    echo "[]" > "$output_file"
-    
-    # Process URLs in parallel
-    cat "$input_file" | head -100 | xargs -n 1 -P "$THREADS" -I {} bash -c "
-        url='{}'
-        temp_file='$temp_dir/\$(echo \$url | md5sum | cut -d' ' -f1)'
-        analyze_url_security '\$url' '\$temp_file'
-    "
-    
-    # Combine all results
-    find "$temp_dir" -name "*.json" -type f | while read -r file; do
-        if [ -s "$file" ]; then
-            cat "$file" >> "${output_file}.tmp"
+    local url_count=0
+    while IFS= read -r url; do
+        # Skip empty lines
+        [ -z "$url" ] && continue
+        
+        # Create temp file for this URL
+        local temp_file="${output_file}.tmp.$$"
+        
+        # Analyze the URL
+        analyze_url_security "$url" "$temp_file"
+        
+        # Append to main file
+        if [ -f "$temp_file" ]; then
+            cat "$temp_file" >> "$output_file"
+            rm -f "$temp_file"
         fi
-    done
+        
+        url_count=$((url_count + 1))
+        
+        # Limit processing for demo (remove this line for full processing)
+        if [ $url_count -ge 50 ]; then
+            print_status "Processed $url_count URLs (limit reached for demo)"
+            break
+        fi
+        
+    done < "$input_file"
     
-    # Create final JSON array
-    if [ -f "${output_file}.tmp" ]; then
-        jq -s '.' "${output_file}.tmp" > "$output_file"
-        rm "${output_file}.tmp"
-    fi
-    
-    # Combine exposure files
-    find "$temp_dir" -name "*.exposures" -type f -exec cat {} \; > "${output_file}.all_exposures" 2>/dev/null
-    find "$temp_dir" -name "*.packages" -type f -exec cat {} \; > "${output_file}.all_packages" 2>/dev/null
-    
-    # Cleanup
-    rm -rf "$temp_dir"
+    # Close JSON array (remove trailing comma and add closing bracket)
+    sed -i '$ s/,$//' "$output_file" 2>/dev/null || true
+    echo "]" >> "$output_file"
 }
 
-# Function to generate security summary
+# Function to generate security summary (simplified)
 generate_security_summary() {
     local results_file="$1"
     local summary_file="$2"
@@ -324,20 +298,15 @@ generate_security_summary() {
         return 1
     fi
     
+    # Count results using grep (jq-free approach)
     local total_sites
-    total_sites=$(jq 'length' "$results_file")
+    total_sites=$(grep -c '"url"' "$results_file" 2>/dev/null || echo "0")
     
     local high_risk
-    high_risk=$(jq '[.[] | select(.security_risk == "HIGH")] | length' "$results_file")
+    high_risk=$(grep -c '"security_risk": "HIGH"' "$results_file" 2>/dev/null || echo "0")
     
     local medium_risk
-    medium_risk=$(jq '[.[] | select(.security_risk == "MEDIUM")] | length' "$results_file")
-    
-    local total_node_modules
-    total_node_modules=$(jq '[.[] | .node_modules_exposures] | add' "$results_file")
-    
-    local total_package_json
-    total_package_json=$(jq '[.[] | .package_json_exposures] | add' "$results_file")
+    medium_risk=$(grep -c '"security_risk": "MEDIUM"' "$results_file" 2>/dev/null || echo "0")
     
     # Create markdown summary
     cat > "$summary_file" << EOF
@@ -347,20 +316,12 @@ generate_security_summary() {
 - **Total Sites Scanned:** $total_sites
 - **HIGH RISK Sites:** $high_risk
 - **MEDIUM RISK Sites:** $medium_risk
-- **node_modules Exposures Found:** $total_node_modules
-- **package.json Exposures Found:** $total_package_json
 
 ## Risk Distribution
-EOF
-    
-    jq -r '
-        group_by(.security_risk) | 
-        map({risk: .[0].security_risk, count: length}) | 
-        .[] | 
-        "- \(.risk): \(.count) sites"
-    ' "$results_file" >> "$summary_file"
-    
-    cat >> "$summary_file" << EOF
+- HIGH: $high_risk sites
+- MEDIUM: $medium_risk sites
+- LOW: $(grep -c '"security_risk": "LOW"' "$results_file" 2>/dev/null || echo "0") sites
+- MINIMAL: $(grep -c '"security_risk": "MINIMAL"' "$results_file" 2>/dev/null || echo "0") sites
 
 ## Remediation Recommendations
 1. **Immediately** block access to /node_modules/ directories
@@ -372,7 +333,10 @@ EOF
 ## High Risk Sites Requiring Immediate Attention
 EOF
     
-    jq -r '.[] | select(.security_risk == "HIGH") | "- \(.url)"' "$results_file" >> "$summary_file"
+    # Extract high risk URLs
+    grep -B2 -A2 '"security_risk": "HIGH"' "$results_file" | grep '"url"' | cut -d'"' -f4 | while read -r high_risk_url; do
+        echo "- $high_risk_url" >> "$summary_file"
+    done
     
     print_success "Security summary saved to: $summary_file"
 }
@@ -383,7 +347,7 @@ main() {
     local output_format="json"
     
     # Parse command line arguments
-    while [[ $# -gt 0 ]]; do
+    while [ $# -gt 0 ]; do
         case $1 in
             -i|--input)
                 input_file="$2"
@@ -421,6 +385,7 @@ main() {
     # Validate input
     if [ -z "$input_file" ]; then
         print_error "Input file is required. Use -i or --input option."
+        echo "Example: $0 -i urls.txt"
         exit 1
     fi
     
@@ -430,13 +395,8 @@ main() {
     fi
     
     # Check dependencies
-    if ! command -v curl &> /dev/null; then
+    if ! command -v curl >/dev/null 2>&1; then
         print_error "curl is required but not installed"
-        exit 1
-    fi
-    
-    if ! command -v jq &> /dev/null; then
-        print_error "jq is required but not installed"
         exit 1
     fi
     
@@ -449,24 +409,13 @@ main() {
     print_status "Starting SECURITY-FOCUSED node_modules exposure detection"
     print_status "Input file: $input_file"
     print_status "Output directory: $OUTPUT_DIR"
-    print_status "Using $THREADS parallel threads"
+    print_status "Timeout: ${TIMEOUT}s per request"
     
     # Process URLs
-    process_urls_parallel "$input_file" "$results_file"
+    process_urls_sequential "$input_file" "$results_file"
     
     # Generate security summary
     generate_security_summary "$results_file" "$summary_file"
-    
-    # Convert to CSV if requested
-    if [ "$output_format" = "csv" ]; then
-        local csv_file="${results_file%.json}.csv"
-        print_status "Converting results to CSV format"
-        
-        echo "URL,Security_Risk,Node_Modules_Exposures,Package_JSON_Exposures,Status" > "$csv_file"
-        jq -r '.[] | [.url, .security_risk, .node_modules_exposures, .package_json_exposures, .status] | @csv' "$results_file" >> "$csv_file"
-        
-        print_success "CSV results saved to: $csv_file"
-    fi
     
     print_success "Security scan complete!"
     print_success "Results saved to: $results_file"
@@ -474,7 +423,7 @@ main() {
     
     # Show final statistics
     local high_risk_count
-    high_risk_count=$(jq '[.[] | select(.security_risk == "HIGH")] | length' "$results_file" 2>/dev/null || echo "0")
+    high_risk_count=$(grep -c '"security_risk": "HIGH"' "$results_file" 2>/dev/null || echo "0")
     
     if [ "$high_risk_count" -gt 0 ]; then
         print_critical "ALERT: $high_risk_count HIGH RISK sites found with node_modules exposure!"
